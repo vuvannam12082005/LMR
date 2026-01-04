@@ -1,0 +1,290 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  Member
+  Librarian
+  Administrator
+}
+
+enum UserStatus {
+  Active
+  Inactive
+  Locked
+  Pending
+}
+
+enum CopyStatus {
+  Available
+  Loaned
+  Reserved
+  Lost
+  Repair
+}
+
+enum CopyCondition {
+  New
+  Good
+  Fair
+  Poor
+}
+
+enum LoanStatus {
+  Active
+  Returned
+  Lost
+}
+
+enum ReservationStatus {
+  Pending
+  Fulfilled
+  Expired
+  Cancelled
+}
+
+enum FineReason {
+  Overdue
+  Damage
+  Lost
+}
+
+enum FineStatus {
+  Unpaid
+  Paid
+  Waived
+}
+
+enum PaymentMethod {
+  Cash
+  Card
+  Online
+}
+
+enum PaymentStatus {
+  Success
+  Failed
+}
+
+model User {
+  userId        BigInt          @id @default(autoincrement())
+  username      String          @unique @db.VarChar(50)
+  passwordHash  String          @db.VarChar(255)
+  email         String          @unique @db.VarChar(100)
+  phone         String?         @db.VarChar(20)
+  role          Role
+  status        UserStatus      @default(Active)
+  firstName     String          @db.VarChar(50)
+  lastName      String          @db.VarChar(50)
+  address       String?         @db.VarChar(255)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  lastLogin     DateTime?
+  member        Member?
+  librarian     Librarian?
+  admin         Administrator?
+  auditLogs     AuditLog[]
+  notifications Notification[]  @relation("UserNotifications")
+  reports       Report[]        @relation("GeneratedReports")
+}
+
+model Member {
+  memberId        BigInt        @id
+  user            User          @relation(fields: [memberId], references: [userId], onDelete: Cascade)
+  memberCode      String        @unique @db.VarChar(20)
+  membershipType  String        @db.VarChar(20)
+  membershipDate  DateTime      @db.Date
+  expiryDate      DateTime      @db.Date
+  borrowingLimit  Int           @default(5)
+  loans           Loan[]
+  reservations    Reservation[]
+  fines           Fine[]
+  payments        Payment[]
+}
+
+model Librarian {
+  librarianId       BigInt    @id
+  user              User      @relation(fields: [librarianId], references: [userId], onDelete: Cascade)
+  employeeId        String    @unique @db.VarChar(20)
+  department        String?   @db.VarChar(50)
+  hireDate          DateTime? @db.Date
+  issuedLoans       Loan[]    @relation("IssuedBy")
+  returnedLoans     Loan[]    @relation("ReturnedTo")
+  waivedFines       Fine[]
+  processedPayments Payment[]
+}
+
+model Administrator {
+  adminId     BigInt  @id
+  user        User    @relation(fields: [adminId], references: [userId], onDelete: Cascade)
+  adminLevel  Int     @default(1)
+  permissions String? @db.Text
+}
+
+model Category {
+  categoryId   BigInt     @id @default(autoincrement())
+  categoryName String     @db.VarChar(100)
+  parentId     BigInt?
+  parent       Category?  @relation("CategoryParent", fields: [parentId], references: [categoryId])
+  children     Category[] @relation("CategoryParent")
+  createdAt    DateTime   @default(now())
+  books        Book[]
+}
+
+model Book {
+  isbn            String        @id @db.VarChar(20)
+  title           String        @db.VarChar(255)
+  author          String        @db.VarChar(255)
+  publisher       String?       @db.VarChar(100)
+  publicationYear Int?
+  description     String?       @db.Text
+  language        String        @default("Vietnamese") @db.VarChar(30)
+  coverImage      String?       @db.VarChar(255)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  categoryId      BigInt?
+  category        Category?     @relation(fields: [categoryId], references: [categoryId], onDelete: SetNull)
+  copies          BookCopy[]
+  reservations    Reservation[]
+
+  @@index([title])
+  @@index([author])
+}
+
+model BookCopy {
+  barcode      String        @id @db.VarChar(20)
+  isbn         String        @db.VarChar(20)
+  book         Book          @relation(fields: [isbn], references: [isbn], onDelete: Restrict)
+  status       CopyStatus    @default(Available)
+  condition    CopyCondition @default(Good)
+  locationCode String?       @db.VarChar(50)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  loans        Loan[]
+
+  @@index([isbn, status])
+}
+
+model Loan {
+  loanId       BigInt     @id @default(autoincrement())
+  memberId     BigInt
+  member       Member     @relation(fields: [memberId], references: [memberId], onDelete: Restrict)
+  barcode      String     @db.VarChar(20)
+  copy         BookCopy   @relation(fields: [barcode], references: [barcode], onDelete: Restrict)
+  issueDate    DateTime   @default(now())
+  dueDate      DateTime
+  returnDate   DateTime?
+  renewalCount Int        @default(0)
+  status       LoanStatus @default(Active)
+  issuedById   BigInt
+  issuedBy     Librarian  @relation("IssuedBy", fields: [issuedById], references: [librarianId], onDelete: Restrict)
+  returnedToId BigInt?
+  returnedTo   Librarian? @relation("ReturnedTo", fields: [returnedToId], references: [librarianId], onDelete: SetNull)
+  fines        Fine[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([memberId, status, dueDate])
+  @@index([barcode, status])
+}
+
+model Reservation {
+  reserveId   BigInt            @id @default(autoincrement())
+  memberId    BigInt
+  member      Member            @relation(fields: [memberId], references: [memberId], onDelete: Restrict)
+  isbn        String            @db.VarChar(20)
+  book        Book              @relation(fields: [isbn], references: [isbn], onDelete: Restrict)
+  reserveDate DateTime          @default(now())
+  status      ReservationStatus @default(Pending)
+  expiryDate  DateTime?
+
+  @@index([isbn, status, reserveDate])
+}
+
+model Fine {
+  fineId      BigInt      @id @default(autoincrement())
+  loanId      BigInt
+  loan        Loan        @relation(fields: [loanId], references: [loanId], onDelete: Restrict)
+  memberId    BigInt
+  member      Member      @relation(fields: [memberId], references: [memberId], onDelete: Restrict)
+  amount      Decimal     @db.Decimal(10, 2)
+  reason      FineReason  @default(Overdue)
+  status      FineStatus  @default(Unpaid)
+  createdAt   DateTime    @default(now())
+  paidAt      DateTime?
+  waivedById  BigInt?
+  waivedBy    Librarian?  @relation(fields: [waivedById], references: [librarianId], onDelete: SetNull)
+  waivedAt    DateTime?
+  waiveReason String?     @db.Text
+  payments    Payment[]
+
+  @@index([memberId, status])
+}
+
+model Payment {
+  paymentId      BigInt        @id @default(autoincrement())
+  fineId         BigInt
+  fine           Fine          @relation(fields: [fineId], references: [fineId], onDelete: Restrict)
+  memberId       BigInt
+  member         Member        @relation(fields: [memberId], references: [memberId], onDelete: Restrict)
+  amount         Decimal       @db.Decimal(10, 2)
+  method         PaymentMethod @default(Online)
+  transactionRef String?       @db.VarChar(64)
+  status         PaymentStatus @default(Success)
+  createdAt      DateTime      @default(now())
+  processedById  BigInt?
+  processedBy    Librarian?    @relation(fields: [processedById], references: [librarianId], onDelete: SetNull)
+
+  @@index([memberId, createdAt])
+}
+
+model SystemConfig {
+  configKey   String   @id @db.VarChar(50)
+  configValue String   @db.VarChar(255)
+  updatedAt   DateTime @updatedAt
+}
+
+model AuditLog {
+  logId      BigInt   @id @default(autoincrement())
+  userId     BigInt
+  user       User     @relation(fields: [userId], references: [userId], onDelete: Restrict)
+  action     String   @db.VarChar(50)
+  entityType String?  @db.VarChar(50)
+  entityId   String?  @db.VarChar(50)
+  ipAddress  String?  @db.VarChar(45)
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId, action])
+}
+
+model Notification {
+  notificationId BigInt   @id @default(autoincrement())
+  userId         BigInt
+  user           User     @relation("UserNotifications", fields: [userId], references: [userId], onDelete: Restrict)
+  type           String   @db.VarChar(50)
+  channel        String   @db.VarChar(20)
+  content        String   @db.Text
+  status         String   @db.VarChar(20)
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([userId, status])
+}
+
+model Report {
+  reportId    BigInt   @id @default(autoincrement())
+  reportType  String   @db.VarChar(50)
+  generatedBy BigInt
+  generator   User     @relation("GeneratedReports", fields: [generatedBy], references: [userId], onDelete: Restrict)
+  parameters  String?  @db.Text
+  filePath    String?  @db.VarChar(255)
+  createdAt   DateTime @default(now())
+
+  @@index([reportType, createdAt])
+}

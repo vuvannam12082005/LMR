@@ -1,0 +1,96 @@
+:root {
+    --primary-blue: #1976D2;
+    --success-green: #388E3C;
+    --warning-orange: #F57C00;
+    --error-red: #D32F2F;
+    --bg-light: #F5F5F5;
+    --text-dark: #212121;
+    --text-light: #757575;
+}
+
+body {
+    background-color: var(--bg-light);
+    font-family: 'Roboto', sans-serif;
+    color: var(--text-dark);
+}
+
+.page {
+    min-height: 70vh;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.book-card {
+    cursor: pointer;
+}
+
+.book-card img {
+    height: 200px;
+    object-fit: cover;
+}
+
+.badge-available {
+    background-color: var(--success-green);
+}
+
+.badge-loaned {
+    background-color: var(--warning-orange);
+}
+
+.badge-reserved {
+    background-color: var(--primary-blue);
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(25, 118, 210, 0.05);
+}
+
+.stat-card {
+    border-left: 4px solid var(--primary-blue);
+}
+
+.stat-card.success {
+    border-left-color: var(--success-green);
+}
+
+.stat-card.warning {
+    border-left-color: var(--warning-orange);
+}
+
+.stat-card.danger {
+    border-left-color: var(--error-red);
+}
+
+.btn-primary {
+    background-color: var(--primary-blue);
+    border-color: var(--primary-blue);
+}
+
+.btn-primary:hover {
+    background-color: #1565C0;
+    border-color: #1565C0;
+}
+
+.navbar-brand {
+    font-weight: 600;
+    font-size: 1.3rem;
+}
+
+.display-1 {
+    font-size: 4rem;
+}
+
+@media (max-width: 768px) {
+    .display-1 {
+        font-size: 2.5rem;
+    }
+}
