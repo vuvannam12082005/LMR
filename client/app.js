@@ -408,8 +408,8 @@ async function loadMemberDashboard() {
                                     const isOverdue = dueDate < new Date();
                                     return `
                                         <tr>
-                                            <td>${loan.bookCopy.book.title}</td>
-                                            <td>${loan.bookCopy.barcode}</td>
+                                            <td>${loan.copy.book.title}</td>
+                                            <td>${loan.barcode}</td>
                                             <td class="${isOverdue ? 'text-danger' : ''}">${dueDate.toLocaleDateString()}</td>
                                             <td>${loan.renewalCount}/2</td>
                                             <td>
@@ -478,7 +478,7 @@ async function loadMemberDashboard() {
                             <tbody>
                                 ${fines.map(fine => `
                                     <tr>
-                                        <td>${fine.loan.bookCopy.book.title}</td>
+                                        <td>${fine.loan.copy.book.title}</td>
                                         <td>${parseFloat(fine.amount).toLocaleString()} VND</td>
                                         <td><span class="badge bg-${fine.status === 'Paid' ? 'success' : 'danger'}">${fine.status}</span></td>
                                         <td>
