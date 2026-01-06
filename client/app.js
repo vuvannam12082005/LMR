@@ -449,7 +449,7 @@ async function loadMemberDashboard() {
                                         <td>${new Date(res.reserveDate).toLocaleDateString()}</td>
                                         <td>
                                             ${res.status === 'Pending' ? `
-                                                <button class="btn btn-sm btn-danger" onclick="cancelReservation('${res.reservationId}')">Cancel</button>
+                                                <button class="btn btn-sm btn-danger" onclick="cancelReservation('${res.reserveId}')">Cancel</button>
                                             ` : ''}
                                         </td>
                                     </tr>
@@ -635,8 +635,9 @@ async function loadCheckoutPage() {
             <div class="card-body">
                 <form onsubmit="checkoutBook(event)">
                     <div class="mb-3">
-                        <label class="form-label">Member Code</label>
-                        <input type="text" class="form-control" id="checkoutMemberCode" placeholder="MEM2024001" required>
+                        <label class="form-label">Member Username</label>
+                        <input type="text" class="form-control" id="checkoutMemberCode" placeholder="member1" required>
+                        <small class="text-muted">Enter member's username (e.g., member1, member2)</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Book Barcode</label>
@@ -654,20 +655,20 @@ async function loadCheckoutPage() {
 async function checkoutBook(event) {
     event.preventDefault();
     
-    const memberCode = document.getElementById('checkoutMemberCode').value;
+    const username = document.getElementById('checkoutMemberCode').value;
     const barcode = document.getElementById('checkoutBarcode').value;
     
     try {
         const result = await apiCall('/loans', {
             method: 'POST',
-            body: JSON.stringify({ memberCode, barcode })
+            body: JSON.stringify({ username, barcode })
         });
         
         const dueDate = new Date(result.dueDate);
         const html = `
             <div class="alert alert-success">
                 <h5>Checkout Successful!</h5>
-                <p><strong>Book:</strong> ${result.bookCopy.book.title}</p>
+                <p><strong>Book:</strong> ${result.copy.book.title}</p>
                 <p><strong>Member:</strong> ${result.member.user.firstName} ${result.member.user.lastName}</p>
                 <p><strong>Due Date:</strong> ${dueDate.toLocaleDateString()}</p>
             </div>
@@ -718,11 +719,10 @@ async function checkinBook(event) {
     
     try {
         // Find active loan by barcode
-        const response = await fetch(`${API_URL}/loans?barcode=${barcode}`, {
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        const loans = await response.json();
-        const activeLoan = loans.find(l => l.status === 'Active');
+        const loansData = await apiCall('/loans?status=Active');
+        
+        // Find loan with matching barcode
+        const activeLoan = loansData.find(l => l.barcode === barcode && l.status === 'Active');
         
         if (!activeLoan) {
             throw new Error('No active loan found for this barcode');
@@ -736,8 +736,8 @@ async function checkinBook(event) {
         let html = `
             <div class="alert alert-success">
                 <h5>Checkin Successful!</h5>
-                <p><strong>Book:</strong> ${result.bookCopy.book.title}</p>
-                <p><strong>Return Date:</strong> ${new Date(result.returnDate).toLocaleDateString()}</p>
+                <p><strong>Book:</strong> ${result.loan.copy.book.title}</p>
+                <p><strong>Return Date:</strong> ${new Date(result.loan.returnDate).toLocaleDateString()}</p>
         `;
         
         if (result.fine) {
@@ -745,6 +745,13 @@ async function checkinBook(event) {
                 <hr>
                 <p class="text-danger"><strong>Fine Generated:</strong> ${parseFloat(result.fine.amount).toLocaleString()} VND</p>
                 <p><small>Reason: ${result.fine.reason}</small></p>
+            `;
+        }
+        
+        if (result.reservation) {
+            html += `
+                <hr>
+                <p class="text-info"><strong>Reservation Fulfilled:</strong> Book reserved for another member</p>
             `;
         }
         
@@ -757,7 +764,6 @@ async function checkinBook(event) {
 }
 
 async function loadManageBooksPage() {
-    console.log('Loading Manage Books page...');
     const html = `
         <ul class="nav nav-tabs mb-3" role="tablist">
             <li class="nav-item">
@@ -861,9 +867,6 @@ async function loadManageBooksPage() {
     const container = document.getElementById('manageBooksContent');
     if (container) {
         container.innerHTML = html;
-        console.log('Manage Books content loaded successfully');
-    } else {
-        console.error('manageBooksContent container not found!');
     }
 }
 

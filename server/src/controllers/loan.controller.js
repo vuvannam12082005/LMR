@@ -2,15 +2,25 @@ import { z } from 'zod';
 import * as loanService from '../services/loan.service.js';
 
 const checkoutSchema = z.object({
-  memberCode: z.string().min(1),
+  username: z.string().min(1),
   barcode: z.string().min(1)
 });
 
 export async function checkout(req, res, next) {
   try {
     const data = checkoutSchema.parse(req.body);
-    const loan = await loanService.checkout(data.memberCode, data.barcode, req.user.userId);
+    const loan = await loanService.checkout(data.username, data.barcode, req.user.userId);
     res.status(201).json(loan);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getAllLoans(req, res, next) {
+  try {
+    const status = req.query.status || 'Active';
+    const loans = await loanService.getAllLoans(status);
+    res.json(loans);
   } catch (error) {
     next(error);
   }

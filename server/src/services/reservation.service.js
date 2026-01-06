@@ -25,6 +25,10 @@ export async function create(memberId, isbn) {
 }
 
 export async function cancel(reserveId, memberId) {
+  if (!memberId) {
+    throw new ForbiddenError('User ID is required');
+  }
+  
   const reservation = await prisma.reservation.findUnique({
     where: { reserveId: BigInt(reserveId) }
   });
@@ -33,7 +37,7 @@ export async function cancel(reserveId, memberId) {
     throw new NotFoundError('Reservation not found');
   }
   
-  if (reservation.memberId.toString() !== memberId) {
+  if (reservation.memberId.toString() !== memberId.toString()) {
     throw new ForbiddenError('Not your reservation');
   }
   

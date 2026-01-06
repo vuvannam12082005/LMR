@@ -5,17 +5,29 @@ import * as fineService from './fine.service.js';
 import * as reservationService from './reservation.service.js';
 import * as auditService from './audit.service.js';
 
-export async function checkout(memberCode, barcode, librarianId) {
+export async function checkout(username, barcode, librarianUserId) {
   return await prisma.$transaction(async (tx) => {
-    // Step 1: Find and validate member
-    const member = await tx.member.findUnique({
-      where: { memberCode },
-      include: { user: true }
+    // Get librarian record from user ID
+    const librarian = await tx.librarian.findUnique({
+      where: { librarianId: BigInt(librarianUserId) }
     });
     
-    if (!member) {
+    if (!librarian) {
+      throw new ForbiddenError('User is not a librarian');
+    }
+    
+    // Step 1: Find and validate member by username
+    const user = await tx.user.findUnique({
+      where: { username },
+      include: { member: true }
+    });
+    
+    if (!user || !user.member) {
       throw new NotFoundError('Member not found');
     }
+    
+    const member = user.member;
+    member.user = user;
     
     if (member.user.status !== 'Active') {
       throw new BadRequestError('Member account not active');
@@ -62,7 +74,7 @@ export async function checkout(memberCode, barcode, librarianId) {
         barcode: barcode,
         dueDate: dueDate,
         status: 'Active',
-        issuedById: BigInt(librarianId),
+        issuedById: librarian.librarianId,
         renewalCount: 0
       },
       include: {
@@ -86,7 +98,7 @@ export async function checkout(memberCode, barcode, librarianId) {
     
     // Step 7: Audit log
     await auditService.log({
-      userId: librarianId,
+      userId: librarianUserId,
       action: 'CHECKOUT',
       entityType: 'Loan',
       entityId: loan.loanId.toString()
@@ -96,8 +108,17 @@ export async function checkout(memberCode, barcode, librarianId) {
   });
 }
 
-export async function checkin(loanId, librarianId) {
+export async function checkin(loanId, librarianUserId) {
   return await prisma.$transaction(async (tx) => {
+    // Get librarian record from user ID
+    const librarian = await tx.librarian.findUnique({
+      where: { librarianId: BigInt(librarianUserId) }
+    });
+    
+    if (!librarian) {
+      throw new ForbiddenError('User is not a librarian');
+    }
+    
     // Step 1: Find and validate loan
     const loan = await tx.loan.findUnique({
       where: { loanId: BigInt(loanId) },
@@ -120,12 +141,19 @@ export async function checkin(loanId, librarianId) {
     
     // Step 2: Update loan to Returned
     const returnDate = new Date();
-    await tx.loan.update({
+    const updatedLoan = await tx.loan.update({
       where: { loanId: loan.loanId },
       data: {
         status: 'Returned',
         returnDate: returnDate,
-        returnedToId: BigInt(librarianId)
+        returnedToId: librarian.librarianId
+      },
+      include: {
+        copy: {
+          include: {
+            book: true
+          }
+        }
       }
     });
     
@@ -197,13 +225,13 @@ export async function checkin(loanId, librarianId) {
     
     // Step 7: Audit log
     await auditService.log({
-      userId: librarianId,
+      userId: librarianUserId,
       action: 'CHECKIN',
       entityType: 'Loan',
       entityId: loan.loanId.toString()
     });
     
-    return { loan, fine, reservation };
+    return { loan: updatedLoan, fine, reservation };
   });
 }
 
@@ -333,5 +361,42 @@ export async function getMemberHistory(memberId) {
       }
     },
     orderBy: { returnDate: 'desc' }
+  });
+}
+
+export async function getAllLoans(status) {
+  const where = {};
+  
+  if (status) {
+    where.status = status;
+  }
+  
+  return await prisma.loan.findMany({
+    where,
+    include: {
+      member: {
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              username: true
+            }
+          }
+        }
+      },
+      copy: {
+        include: {
+          book: {
+            select: {
+              isbn: true,
+              title: true,
+              author: true
+            }
+          }
+        }
+      }
+    },
+    orderBy: { issueDate: 'desc' }
   });
 }
